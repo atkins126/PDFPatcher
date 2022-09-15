@@ -18,7 +18,7 @@ namespace PDFPatcher.Functions
 
 		static readonly CommandRegistry<Editor.Controller> __Commands = InitCommands();
 
-		private static CommandRegistry<Editor.Controller> InitCommands() {
+		static CommandRegistry<Editor.Controller> InitCommands() {
 			var d = new CommandRegistry<Editor.Controller>();
 			d.Register(new Editor.LoadDocumentCommand(true, false), Commands.Open);
 			d.Register(new Editor.LoadDocumentCommand(true, true), Commands.ImportBookmark);
@@ -114,7 +114,7 @@ namespace PDFPatcher.Functions
 			di.Insert(0, new ToolStripMenuItem { Name = Constants.Coordinates.Unchanged, Text = Constants.Coordinates.Unchanged });
 			_ChangeZoomRate.DropDownItemClicked += _MainToolbar_ItemClicked;
 			_ChangeCase.DropDownItemClicked += (object s, ToolStripItemClickedEventArgs args) => {
-				FormHelper.HidePopupMenu(args.ClickedItem);
+				args.ClickedItem.HidePopupMenu();
 				_EditMenu.Hide();
 				var i = Array.IndexOf(SetCaseProcessor.CaseNames, args.ClickedItem.Text);
 				if (i != -1) {
@@ -127,7 +127,7 @@ namespace PDFPatcher.Functions
 			_SetOpenStatus.DropDownItemClicked += _MainToolbar_ItemClicked;
 
 			AppContext.MainForm.SetTooltip(_IncludeDecendantBox, "选中此选项后，加粗、斜体等其它修改书签的操作将应用到选中书签的子书签");
-			_IncludeDecendantBox.CheckedChanged += (s, args) => { _BookmarkBox.OperationAffectsDescendants = _IncludeDecendantBox.Checked; };
+			_IncludeDecendantBox.CheckedChanged += (s, args) => _BookmarkBox.OperationAffectsDescendants = _IncludeDecendantBox.Checked;
 
 			_UndoButton.DropDownOpening += (object s, EventArgs args) => {
 				var i = _UndoMenu.Items;
@@ -176,21 +176,34 @@ namespace PDFPatcher.Functions
 				ScrollToSelectedBookmarkLocation();
 			};
 			_CurrentPageBox.KeyUp += (s, args) => {
-				if (args.KeyCode != Keys.Enter) {
-					return;
+				int d;
+				switch (args.KeyCode) {
+					case Keys.Enter:
+						d = 0;
+						break;
+					case Keys.Up:
+					case Keys.OemMinus:
+						d = -1;
+						break;
+					case Keys.Down:
+					case Keys.Add:
+						d = 1;
+						break;
+					case Keys.Home:
+						_ViewerBox.CurrentPageNumber = 1;
+						return;
+					case Keys.End:
+						_ViewerBox.CurrentPageNumber = -1;
+						return;
+					default:
+						return;
 				}
-				int p;
-				if (_CurrentPageBox.Text.TryParse(out p)) {
-					_ViewerBox.CurrentPageNumber = p;
-					_CurrentPageBox.Text = p.ToText();
+				if (_CurrentPageBox.Text.TryParse(out int p)) {
+					_ViewerBox.CurrentPageNumber = p + d;
 				}
 			};
-			_ViewerButton.DropDownOpening += (s, args) => {
-				SetupMenu(_ViewerButton.DropDownItems);
-			};
-			_OcrMenu.DropDownItemClicked += (s, args) => {
-				_ViewerBox.OcrLanguage = (int)(args.ClickedItem.Tag ?? 0);
-			};
+			_ViewerButton.DropDownOpening += (s, args) => SetupMenu(_ViewerButton.DropDownItems);
+			_OcrMenu.DropDownItemClicked += (s, args) => _ViewerBox.OcrLanguage = (int)(args.ClickedItem.Tag ?? 0);
 			_OcrMenu.DropDownOpening += (s, args) => {
 				var m = _OcrMenu.DropDownItems;
 				if (m.Count == 1) {
@@ -206,21 +219,11 @@ namespace PDFPatcher.Functions
 				}
 			};
 			_ZoomBox.Text = Constants.DestinationAttributes.ViewType.FitH;
-			_ZoomBox.TextChanged += (s, args) => {
-				_ViewerBox.LiteralZoom = _ZoomBox.Text;
-			};
+			_ZoomBox.TextChanged += (s, args) => _ViewerBox.LiteralZoom = _ZoomBox.Text;
 			_ViewerBox.Enabled = false;
-			_ViewerBox.DocumentLoaded += (s, args) => {
-				_CurrentPageBox.ToolTipText = "文档共" + _ViewerBox.Document.PageCount + "页";
-			};
-			_ViewerBox.ZoomChanged += (s, args) => {
-				_ZoomBox.ToolTipText = "当前显示比例：" + (_ViewerBox.ZoomFactor * 100).ToInt32() + "%";
-			};
-			_ViewerBox.PageChanged += (s, args) => {
-				_CurrentPageBox.Text = _ViewerBox.CurrentPageNumber.ToText();
-				//var b = _ViewerBox.PageBound;
-				//_PageInfoBox.Text = string.Concat ("尺寸：", Math.Round (b.Width, 1).ToText (), " * ", Math.Round (b.Height, 1).ToText ());
-			};
+			_ViewerBox.DocumentLoaded += (s, args) => _CurrentPageBox.ToolTipText = "文档共" + _ViewerBox.Document.PageCount + "页\nHome：转到第一页\nEnd：转到最后一页";
+			_ViewerBox.ZoomChanged += (s, args) => _ZoomBox.ToolTipText = "当前显示比例：" + (_ViewerBox.ZoomFactor * 100).ToInt32() + "%";
+			_ViewerBox.PageChanged += (s, args) => _CurrentPageBox.Text = _ViewerBox.CurrentPageNumber.ToText();
 			//_ViewerBox.SelectionChanged += (s, args) =>
 			//{
 			//	var t = args.Selection.SelectedText;
@@ -246,10 +249,10 @@ namespace PDFPatcher.Functions
 			_ViewerBox.MouseClick += _ViewBox_MouseClick;
 			_ViewerToolbar.Enabled = false;
 
-			Disposed += (s, args) => { _controller.Destroy(); };
+			Disposed += (s, args) => _controller.Destroy();
 		}
 
-		private void ScrollToSelectedBookmarkLocation() {
+		void ScrollToSelectedBookmarkLocation() {
 			BookmarkElement el;
 			var i = _BookmarkBox.GetFirstSelectedIndex();
 			//_MainToolbar.ToggleEnabled (i != -1, _editButtonNames);
@@ -281,7 +284,7 @@ namespace PDFPatcher.Functions
 			_searchForm?.Close();
 		}
 
-		private void _ViewBox_MouseClick(object sender, MouseEventArgs args) {
+		void _ViewBox_MouseClick(object sender, MouseEventArgs args) {
 			if (_ViewerBox.FirstPage == 0) {
 				return;
 			}
@@ -302,12 +305,12 @@ namespace PDFPatcher.Functions
 			//_controller.ShowInsertBookmarkDialog (l, p, t);
 		}
 
-		private void _MainToolbar_ItemClicked(object sender, ToolStripItemClickedEventArgs e) {
-			FormHelper.HidePopupMenu(e.ClickedItem);
+		void _MainToolbar_ItemClicked(object sender, ToolStripItemClickedEventArgs e) {
+			e.ClickedItem.HidePopupMenu();
 			ExecuteCommand(e.ClickedItem.Name);
 		}
 
-		private void ButtonClicked(object sender, EventArgs e) {
+		void ButtonClicked(object sender, EventArgs e) {
 			if (sender == _UndoButton) {
 				_controller.Undo(1);
 			}
@@ -459,12 +462,12 @@ namespace PDFPatcher.Functions
 			_ViewerBox.Reopen();
 		}
 
-		private void _BookmarkColorButton_SelectedColorChanged(object sender, EventArgs e) {
+		void _BookmarkColorButton_SelectedColorChanged(object sender, EventArgs e) {
 			var c = _BookmarkColorButton.Color;
 			_controller.ProcessBookmarks(new SetTextColorProcessor(c));
 		}
 
-		private void _OpenButton_DropDownOpening(object sender, EventArgs e) {
+		void _OpenButton_DropDownOpening(object sender, EventArgs e) {
 			var m = (sender as ToolStripDropDownItem);
 			var l = m.DropDown.Items;
 			l.ClearDropDownItems();
@@ -475,8 +478,8 @@ namespace PDFPatcher.Functions
 			l.AddInfoFiles();
 		}
 
-		private void _OpenButton_DropDownItemClicked(object sender, ToolStripItemClickedEventArgs e) {
-			FormHelper.HidePopupMenu(e.ClickedItem);
+		void _OpenButton_DropDownItemClicked(object sender, ToolStripItemClickedEventArgs e) {
+			e.ClickedItem.HidePopupMenu();
 			ExecuteCommand(Commands.OpenFile, e.ClickedItem.ToolTipText);
 		}
 
@@ -544,12 +547,12 @@ namespace PDFPatcher.Functions
 			return base.ProcessCmdKey(ref msg, keyData);
 		}
 
-		private void _BookmarkBox_DragEnter(object sender, DragEventArgs e) {
-			FormHelper.FeedbackDragFileOver(e, Constants.FileExtensions.PdfAndAllBookmarkExtension);
+		void _BookmarkBox_DragEnter(object sender, DragEventArgs e) {
+			e.FeedbackDragFileOver(Constants.FileExtensions.PdfAndAllBookmarkExtension);
 		}
 
-		private void _BookmarkBox_DragDrop(object sender, DragEventArgs e) {
-			if (FormHelper.DropFileOver(this, e, Constants.FileExtensions.PdfAndAllBookmarkExtension)) {
+		void _BookmarkBox_DragDrop(object sender, DragEventArgs e) {
+			if (this.DropFileOver(e, Constants.FileExtensions.PdfAndAllBookmarkExtension)) {
 				_controller.LoadDocument(Text, false);
 			}
 		}

@@ -197,9 +197,13 @@ namespace PDFPatcher.Processor
 					OutlineManager.KillOutline(pdf);
 				}
 				pdf.SelectPages(pages);
+				pdf.Catalog.Remove(PdfName.PAGELABELS);
 				if (options.KeepDocumentProperties == false) {
 					pdf.Trailer.Remove(PdfName.INFO);
 					pdf.Catalog.Remove(PdfName.METADATA);
+				}
+				else if (pdf.Catalog == pdf.Trailer.GetAsDict(PdfName.INFO)) {
+					FixIncorrectTrailerInfo(pdf);
 				}
 				if (bm != null) {
 					pdf.Catalog.Put(PdfName.OUTLINES, OutlineManager.WriteOutline(w.Writer, bm, ranges.TotalPages));
@@ -232,6 +236,15 @@ namespace PDFPatcher.Processor
 				//w.Close ();
 			}
 			Tracker.TraceMessage(Tracker.Category.Alert, "成功提取文件内容到 <<" + targetFile + ">>。");
+		}
+
+		static void FixIncorrectTrailerInfo(PdfReader pdf) {
+			var d = new PdfDictionary();
+			pdf.Trailer.Put(PdfName.INFO, d);
+			d.Merge(pdf.Catalog);
+			d.Put(PdfName.TYPE, PdfName.INFO);
+			d.Remove(PdfName.PAGES);
+			d.Remove(PdfName.OUTLINES);
 		}
 
 		static string RewriteTargetFileName(string sourceFile, string targetFile, PdfReader pdf) {
